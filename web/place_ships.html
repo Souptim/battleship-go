@@ -1,0 +1,499 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Battleship — Place Ships (Updated)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Arial;
+      padding: 18px;
+      background: #061018;
+      color: #eaf2f8;
+    }
+
+    h1 {
+      color: #4ae;
+      margin-bottom: 6px;
+    }
+
+    .layout {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .board {
+      background: #071827;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+    }
+
+    table.grid {
+      border-collapse: collapse;
+    }
+
+    table.grid td {
+      width: 34px;
+      height: 34px;
+      vertical-align: middle;
+      text-align: center;
+      border: 1px solid #223044;
+      background: #03121a;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    table.grid td.ship {
+      background: #2b9d59;
+    }
+
+    /* placed ship */
+    table.grid td.hover-ok {
+      background: #145c33;
+    }
+
+    /* hover placement valid */
+    table.grid td.hover-bad {
+      background: #662222;
+    }
+
+    /* hover invalid */
+    .controls {
+      min-width: 260px;
+    }
+
+    .ship-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .ship-btn {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      background: #0f1720;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .ship-btn.selected {
+      outline: 3px solid rgba(74, 174, 255, 0.12);
+      background: #071827;
+    }
+
+    .small {
+      font-size: 13px;
+      color: #9aa7b2;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    button {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: #4ae;
+      color: #001;
+    }
+
+    button.warn {
+      background: #e04;
+      color: #fff;
+    }
+
+    #placedList {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #cfe;
+    }
+
+    .status {
+      margin-top: 12px;
+      padding: 8px;
+      background: #071018;
+      border-radius: 6px;
+      color: #9dd;
+    }
+
+    .warning {
+      color: #ffb86b;
+      font-weight: 600;
+    }
+
+    .note {
+      color: #9aa7b2;
+      font-size: 13px;
+    }
+
+    .code {
+      background: #061018;
+      padding: 4px 6px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Place Your Ships</h1>
+  <p class="note">Open this page from your <code>players.html</code> tab (click "Open Ship Placement") so it reuses the
+    same WebSocket connection and player identity.</p>
+
+  <div class="layout">
+    <div class="board">
+      <table class="grid" id="grid" role="grid" aria-label="Ship placement grid"></table>
+    </div>
+
+    <div class="controls">
+      <div class="ship-list" id="shipList"></div>
+
+      <div class="row">
+        <label class="small">Orientation:</label>
+        <button id="orientBtn">H</button>
+        <div style="flex:1"></div>
+      </div>
+
+      <div class="row">
+        <button id="undoBtn">Undo last</button>
+        <button id="clearBtn" class="warn">Clear all</button>
+      </div>
+
+      <div style="height:8px"></div>
+
+      <div style="margin-bottom:8px;">
+        <div class="small">Match ID</div>
+        <input id="matchId" placeholder="paste match_id here (or open from players tab)"
+          style="width:100%; padding:8px; background:#051018; color:#fff; border:1px solid #23303b; border-radius:6px;" />
+      </div>
+
+      <div class="row">
+        <button id="sendBtn">Send placements to server</button>
+      </div>
+
+      <div id="placedList"></div>
+
+      <div class="status" id="status">Status: ready</div>
+
+
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      // --- config & UI state ---
+      const SHIP_SIZES = { carrier: 5, battleship: 4, cruiser: 3, submarine: 3, destroyer: 2 };
+      const SHIP_ORDER = ["carrier", "battleship", "cruiser", "submarine", "destroyer"];
+      const SIZE = 10;
+      let orientation = "H";
+      let selectedShip = null;
+      let placements = []; // {type,x,y,dir}
+      let gridFlags = Array.from({ length: SIZE }, () => Array(SIZE).fill(0)); // 0 empty, 1 occupied
+
+      // DOM
+      const gridEl = document.getElementById("grid");
+      const shipListEl = document.getElementById("shipList");
+      const orientBtn = document.getElementById("orientBtn");
+      const undoBtn = document.getElementById("undoBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const sendBtn = document.getElementById("sendBtn");
+      const placedListEl = document.getElementById("placedList");
+      const matchIdEl = document.getElementById("matchId");
+      const statusEl = document.getElementById("status");
+
+      // websocket: prefer opener.ws so we reuse identity
+      let ws = (window.opener && window.opener.ws) ? window.opener.ws : null;
+      let myID = (window.opener && window.opener.myPlayerID) ? window.opener.myPlayerID : null;
+
+      // helper to update status line
+      function setStatus(text, isWarning) {
+        statusEl.textContent = "Status: " + text;
+        statusEl.style.color = isWarning ? "#ffb86b" : "#9dd";
+      }
+
+      // --- grid creation & UI helpers ---
+      function buildGrid() {
+        gridEl.innerHTML = "";
+        for (let r = 0; r < SIZE; r++) {
+          const tr = document.createElement("tr");
+          for (let c = 0; c < SIZE; c++) {
+            const td = document.createElement("td");
+            td.dataset.x = c; td.dataset.y = r;
+            td.addEventListener("click", onCellClick);
+            td.addEventListener("mouseenter", onCellHover);
+            td.addEventListener("mouseleave", onCellLeave);
+            tr.appendChild(td);
+          }
+          gridEl.appendChild(tr);
+        }
+        redraw();
+      }
+
+      function redraw() {
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            const td = gridEl.rows[r].cells[c];
+            td.className = "";
+            if (gridFlags[r][c] === 1) td.classList.add("ship");
+          }
+        }
+      }
+
+      // build ship selector
+      function buildShipList() {
+        shipListEl.innerHTML = "";
+        SHIP_ORDER.forEach(name => {
+          const size = SHIP_SIZES[name];
+          const btn = document.createElement("div");
+          btn.className = "ship-btn";
+          btn.id = "ship-" + name;
+          btn.innerHTML = `<div><b>${name}</b> <span class="small">(${size})</span></div><div class="small">click to select</div>`;
+          btn.addEventListener("click", () => {
+            if (selectedShip === name) selectedShip = null;
+            else selectedShip = name;
+            updateShipSelection();
+          });
+          shipListEl.appendChild(btn);
+        });
+        updateShipSelection();
+      }
+
+      function updateShipSelection() {
+        SHIP_ORDER.forEach(name => {
+          const el = document.getElementById("ship-" + name);
+          if (!el) return;
+          el.classList.toggle("selected", selectedShip === name);
+          const placed = placements.find(p => p.type === name);
+          el.style.opacity = placed ? "0.45" : "1";
+          el.style.pointerEvents = placed ? "none" : "auto";
+        });
+        redrawPlacedList();
+      }
+
+      function redrawPlacedList() {
+        if (placements.length === 0) {
+          placedListEl.innerHTML = "<div class='small'>No ships placed yet.</div>";
+        } else {
+          placedListEl.innerHTML = "<b>Placed:</b>";
+          placements.forEach(p => {
+            const d = document.createElement("div");
+            d.className = "small";
+            d.textContent = `${p.type} @ (${p.x},${p.y}) ${p.dir}`;
+            placedListEl.appendChild(d);
+          });
+        }
+      }
+
+      // hover helpers
+      function onCellHover(e) {
+        const td = e.target;
+        if (!selectedShip) return;
+        const x = parseInt(td.dataset.x, 10);
+        const y = parseInt(td.dataset.y, 10);
+        const size = SHIP_SIZES[selectedShip];
+        const ok = canPlace(x, y, orientation, size);
+        // mark hover cells
+        for (let i = 0; i < size; i++) {
+          const rx = x + (orientation === "H" ? i : 0);
+          const ry = y + (orientation === "V" ? i : 0);
+          if (rx < 0 || ry < 0 || rx >= SIZE || ry >= SIZE) continue;
+          const cell = gridEl.rows[ry].cells[rx];
+          if (ok) cell.classList.add("hover-ok"); else cell.classList.add("hover-bad");
+        }
+      }
+      function onCellLeave(e) {
+        const td = e.target;
+        if (!selectedShip) return;
+        const x = parseInt(td.dataset.x, 10);
+        const y = parseInt(td.dataset.y, 10);
+        const size = SHIP_SIZES[selectedShip];
+        for (let i = 0; i < size; i++) {
+          const rx = x + (orientation === "H" ? i : 0);
+          const ry = y + (orientation === "V" ? i : 0);
+          if (rx < 0 || ry < 0 || rx >= SIZE || ry >= SIZE) continue;
+          const cell = gridEl.rows[ry].cells[rx];
+          cell.classList.remove("hover-ok", "hover-bad");
+        }
+      }
+
+      // click to place
+      function onCellClick(e) {
+        if (!selectedShip) {
+          alert("Select a ship first.");
+          return;
+        }
+        const x = parseInt(e.target.dataset.x, 10);
+        const y = parseInt(e.target.dataset.y, 10);
+        const size = SHIP_SIZES[selectedShip];
+        if (!canPlace(x, y, orientation, size)) {
+          alert("Invalid placement (out of bounds or overlap).");
+          return;
+        }
+        for (let i = 0; i < size; i++) {
+          const rx = x + (orientation === "H" ? i : 0);
+          const ry = y + (orientation === "V" ? i : 0);
+          gridFlags[ry][rx] = 1;
+        }
+        placements.push({ type: selectedShip, x, y, dir: orientation });
+        selectedShip = null;
+        updateShipSelection();
+        redraw();
+        setStatus("placed " + placements[placements.length - 1].type);
+      }
+
+      function canPlace(x, y, dir, size) {
+        if (dir === "H") {
+          if (x < 0 || y < 0 || x + size - 1 > SIZE - 1 || y > SIZE - 1) return false;
+          for (let i = 0; i < size; i++) if (gridFlags[y][x + i]) return false;
+        } else {
+          if (x < 0 || y < 0 || y + size - 1 > SIZE - 1 || x > SIZE - 1) return false;
+          for (let i = 0; i < size; i++) if (gridFlags[y + i][x]) return false;
+        }
+        return true;
+      }
+
+      // undo/clear
+      undoBtn.addEventListener("click", () => {
+        if (placements.length === 0) return;
+        const last = placements.pop();
+        const size = SHIP_SIZES[last.type];
+        for (let i = 0; i < size; i++) {
+          const rx = last.x + (last.dir === "H" ? i : 0);
+          const ry = last.y + (last.dir === "V" ? i : 0);
+          gridFlags[ry][rx] = 0;
+        }
+        updateShipSelection();
+        redraw();
+        setStatus("undid " + last.type);
+      });
+
+      clearBtn.addEventListener("click", () => {
+        if (!confirm("Clear all placements?")) return;
+        placements = [];
+        gridFlags = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+        updateShipSelection();
+        redraw();
+        setStatus("cleared");
+      });
+
+      orientBtn.addEventListener("click", () => {
+        orientation = (orientation === "H") ? "V" : "H";
+        orientBtn.textContent = orientation;
+      });
+
+      // --- WebSocket & placement send logic ---
+      // Fail-safe: if opened directly (no opener.ws) we warn and prevent sending.
+      function sendPlacementsToServer() {
+        const matchID = matchIdEl.value.trim();
+        if (!matchID) {
+          alert("Paste your match_id (from match_start) into the Match ID field.");
+          return;
+        }
+        // check exact fleet:
+        const seen = {};
+        for (const p of placements) seen[p.type] = (seen[p.type] || 0) + 1;
+        for (const name of SHIP_ORDER) {
+          if ((seen[name] || 0) !== 1) {
+            alert("You must place exactly one of each ship type. Missing/dup: " + name);
+            return;
+          }
+        }
+
+        if (!ws || ws.readyState !== 1) {
+          // If there's an opener but ws not ready, show clear message
+          if (window.opener && !ws) {
+            setStatus("Cannot send: opener missing ws. Open placement from Players UI.", true);
+          } else {
+            setStatus("Cannot send: WebSocket not connected.", true);
+          }
+          return;
+        }
+
+        const msg = { type: "place_ships", match_id: matchID, ships: placements };
+        try {
+          ws.send(JSON.stringify(msg));
+          // Save to localStorage for fire.html to pick up
+          if (myID) {
+            localStorage.setItem('my_ships_' + matchID + '_' + myID, JSON.stringify(placements));
+          } else {
+            localStorage.setItem('my_ships_' + matchID, JSON.stringify(placements));
+          }
+          setStatus("placements sent — waiting for server ack");
+        } catch (err) {
+          console.error("send error", err);
+          setStatus("send failed: " + err.message, true);
+        }
+      }
+
+      sendBtn.addEventListener("click", sendPlacementsToServer);
+
+      // Attach to ws (opener's) to listen for server responses
+      function attachToOpenerWs() {
+        if (!ws) return;
+        ws.addEventListener("message", (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            // show relevant responses
+            if (msg.type === "ships_ok") {
+              setStatus("ships_ok from server", false);
+              console.log("ships_ok", msg);
+            } else if (msg.type === "ships_error") {
+              setStatus("ships_error: " + (msg.error || "unknown"), true);
+              console.warn("ships_error", msg);
+            } else {
+              // other messages for debugging
+              console.log("ws msg", msg);
+            }
+          } catch (err) {
+            // ignore non-json
+          }
+        });
+      }
+
+      // If opener has currentMatchID, auto-fill it
+      function autofillMatchIDFromOpener() {
+        if (window.opener && window.opener.currentMatchID) {
+          matchIdEl.value = window.opener.currentMatchID;
+          setStatus("match_id auto-filled from players tab");
+        }
+        if (window.opener && window.opener.myPlayerID) {
+          myID = window.opener.myPlayerID;
+        }
+      }
+
+      // --- Initialization ---
+      buildGrid();
+      buildShipList();
+      redrawPlacedList();
+
+      // If there is opener.ws, attach to it; otherwise warn.
+      if (ws) {
+        attachToOpenerWs();
+        autofillMatchIDFromOpener();
+        setStatus("Using opener WebSocket — ready to place ships");
+      } else {
+        setStatus("No opener found. IMPORTANT: open this page from your players.html tab (Open Ship Placement) so it reuses the same player connection.", true);
+      }
+
+      // Expose for quick debugging from console
+      window.__bs_place = {
+        state: () => ({ placements, gridFlags, matchId: matchIdEl.value, openerExists: !!window.opener, myID }),
+        send: sendPlacementsToServer
+      };
+    })();
+  </script>
+</body>
+
+</html>

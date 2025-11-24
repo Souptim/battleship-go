@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battleship-Go</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 600px;
+            padding: 40px;
+            background: #161b22;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            border: 1px solid #30363d;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin: 0 0 16px 0;
+            background: linear-gradient(135deg, #4ae, #238636);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: #8b949e;
+            margin-bottom: 32px;
+        }
+
+        .play-btn {
+            display: inline-block;
+            background: #238636;
+            color: #ffffff;
+            font-size: 1.2rem;
+            font-weight: 600;
+            padding: 14px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(35, 134, 54, 0.4);
+        }
+
+        .play-btn:hover {
+            background: #2ea043;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(46, 160, 67, 0.5);
+        }
+
+        .play-btn:active {
+            transform: translateY(0);
+        }
+
+        .footer {
+            margin-top: 40px;
+            font-size: 0.9rem;
+            color: #484f58;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Battleship-Go</h1>
+        <p>
+            Experience the classic naval combat game in real-time. Made with Go Lang,
+            Challenge friends, place your fleet, and sink enemy ships
+            in this fast-paced multiplayer strategy game.
+        </p>
+        <a href="/players.html" class="play-btn">Play Now</a>
+    </div>
+    <div class="footer">
+        Powered by Go & WebSockets
+    </div>
+</body>
+
+</html>

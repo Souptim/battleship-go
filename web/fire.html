@@ -1,0 +1,762 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Battleship — Fire Mode (show own ships)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Arial;
+      padding: 18px;
+      background: #071019;
+      color: #e8f1f7;
+    }
+
+    h1 {
+      color: #4ae;
+      margin-bottom: 6px;
+    }
+
+    .layout {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .boards {
+      display: flex;
+      gap: 18px;
+    }
+
+    .board {
+      background: #071827;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+    }
+
+    table.grid {
+      border-collapse: collapse;
+    }
+
+    table.grid td {
+      width: 32px;
+      height: 32px;
+      text-align: center;
+      vertical-align: middle;
+      border: 1px solid #223044;
+      background: #03121a;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    table.grid td.hit {
+      background: #8b1d1d;
+    }
+
+    /* hit on enemy or own */
+    table.grid td.miss {
+      background: #4a5560;
+    }
+
+    /* miss */
+    table.grid td.pending {
+      background: #2b2b2b;
+      opacity: 0.85;
+    }
+
+    /* pending shot */
+    table.grid td.own-ship {
+      /* your ship cell, not yet hit */
+      background: rgba(32, 160, 96, 0.16);
+      border: 1px solid rgba(32, 160, 96, 0.28);
+    }
+
+    table.grid td.own-ship-hit {
+      /* your ship cell that was hit */
+      background: #8b1d1d;
+      border: 1px solid #ff6b6b;
+      box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.6);
+    }
+
+    table.grid td.sunk {
+      background: #3a0f0f;
+      box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.6);
+      border: 1px solid #5c1212;
+    }
+
+    table.grid td.disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .status {
+      padding: 8px;
+      background: #0f1720;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+
+    button {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: #4ae;
+      color: #001;
+    }
+
+    .small {
+      font-size: 13px;
+      color: #9aa7b2;
+    }
+
+    .code {
+      background: #061018;
+      padding: 6px 8px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+
+    .label {
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    /* Toast / notification UI */
+    #toastStack {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9999;
+    }
+
+    .toast {
+      background: #0f1720;
+      color: #e6edf3;
+      padding: 10px 12px;
+      border-radius: 8px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+      min-width: 220px;
+      max-width: 320px;
+      font-size: 14px;
+    }
+
+    .toast .title {
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #ffd1c1;
+    }
+
+    /* Game Over Modal */
+    #gameOverModal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(5px);
+      z-index: 10000;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    .modal-content {
+      background: #161b22;
+      padding: 32px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+      max-width: 400px;
+      width: 90%;
+      border: 2px solid #333;
+    }
+
+    .modal-content.victory {
+      border-color: #2ea043;
+      box-shadow: 0 0 40px rgba(46, 160, 67, 0.4);
+    }
+
+    .modal-content.defeat {
+      border-color: #da3633;
+      box-shadow: 0 0 40px rgba(218, 54, 51, 0.4);
+    }
+
+    .modal-title {
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .victory .modal-title {
+      color: #3fb950;
+    }
+
+    .defeat .modal-title {
+      color: #f85149;
+    }
+
+    .modal-msg {
+      font-size: 18px;
+      color: #e6edf3;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .modal-btn {
+      background: #238636;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.2s;
+    }
+
+    .modal-btn:hover {
+      background: #2ea043;
+      transform: scale(1.05);
+    }
+
+    .defeat .modal-btn {
+      background: #da3633;
+    }
+
+    .defeat .modal-btn:hover {
+      background: #f85149;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Battleship — Fire Mode (Your Board shows ships)</h1>
+
+  <div id="status" class="status">Initializing...</div>
+
+  <div class="layout">
+    <div class="boards">
+      <div class="board" id="enemyBoardWrap">
+        <div class="label">Enemy Board (click to fire)</div>
+        <table class="grid" id="enemyGrid" aria-label="Enemy board"></table>
+      </div>
+
+      <div class="board" id="ownBoardWrap">
+        <div class="label">Your Board (opponent shots)</div>
+        <table class="grid" id="ownGrid" aria-label="Your board"></table>
+      </div>
+    </div>
+
+    <div style="min-width:260px;">
+      <div style="margin-bottom:8px"><strong>Match</strong></div>
+      <div style="margin-bottom:6px">Match ID: <div id="matchIdBox" class="small code">none</div>
+      </div>
+      <div style="margin-bottom:6px">Your side: <span id="yourSide" class="small">unknown</span></div>
+      <div style="margin-bottom:6px">Turn: <span id="turnVal" class="small">unknown</span></div>
+      <div style="margin-bottom:10px">Last: <span id="lastResult" class="small">none</span></div>
+
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button id="copyMatch">Copy Match ID</button>
+        <button id="refreshBtn">Refresh status</button>
+      </div>
+
+      <div class="small" id="helpText">
+        <p>Open this page from your <code>players.html</code> tab (click the "Open Fire UI" button). If opened directly,
+          use Refresh to load server state.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastStack" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Game Over Modal -->
+  <div id="gameOverModal">
+    <div id="modalContent" class="modal-content">
+      <div id="modalTitle" class="modal-title">VICTORY</div>
+      <div id="modalMsg" class="modal-msg">You have sunk all enemy ships!</div>
+      <button id="playAgainBtn" class="modal-btn">Play Again</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const SIZE = 10;
+      const enemyGridEl = document.getElementById('enemyGrid');
+      const ownGridEl = document.getElementById('ownGrid');
+      const statusEl = document.getElementById('status');
+      const turnValEl = document.getElementById('turnVal');
+      const lastResultEl = document.getElementById('lastResult');
+      const matchIdBox = document.getElementById('matchIdBox');
+      const yourSideEl = document.getElementById('yourSide');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const copyBtn = document.getElementById('copyMatch');
+      const toastStack = document.getElementById('toastStack');
+
+      const ShipSizes = { carrier: 5, battleship: 4, cruiser: 3, submarine: 3, destroyer: 2 };
+
+      // Models:
+      // enemy: 0 unknown, 1 miss, 2 hit, 3 pending
+      // own: 0 unknown, 1 miss, 2 hit (opponent shot on your board)
+      let enemy = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+      let own = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+
+      // ownShips: boolean grid for your ship placements (true where you placed a ship)
+      let ownShips = Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
+
+      let matchID = "";
+      let mySide = null;
+      let currentTurn = null;
+      let myID = null;
+      let lastShot = null;
+
+      let ws = (window.opener && window.opener.ws) ? window.opener.ws : null;
+      if (ws) statusEl.textContent = "Connected via opener (players tab) — listening for messages.";
+      else statusEl.textContent = "No opener websocket. Open from Players UI or Refresh.";
+
+      function buildGrid(el) {
+        el.innerHTML = "";
+        for (let r = 0; r < SIZE; r++) {
+          const tr = document.createElement('tr');
+          for (let c = 0; c < SIZE; c++) {
+            const td = document.createElement('td');
+            td.dataset.x = c; td.dataset.y = r;
+            tr.appendChild(td);
+          }
+          el.appendChild(tr);
+        }
+      }
+      buildGrid(enemyGridEl);
+      buildGrid(ownGridEl);
+
+      function redraw() {
+        // enemy
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            const td = enemyGridEl.rows[r].cells[c];
+            td.className = "";
+            if (enemy[r][c] === 1) td.classList.add('miss');
+            else if (enemy[r][c] === 2) td.classList.add('hit');
+            else if (enemy[r][c] === 3) td.classList.add('pending');
+            if (!isMyTurn()) td.classList.add('disabled');
+          }
+        }
+        // own
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            const td = ownGridEl.rows[r].cells[c];
+            td.className = "";
+            // show your placed ships
+            if (ownShips[r][c]) {
+              // if that ship cell was hit by opponent, show 'own-ship-hit'
+              if (own[r][c] === 2) td.classList.add('own-ship-hit');
+              else td.classList.add('own-ship');
+            } else {
+              // empty cell styling
+              if (own[r][c] === 1) td.classList.add('miss');
+              else if (own[r][c] === 2) td.classList.add('hit'); // weird case: hit on empty cell
+            }
+          }
+        }
+      }
+
+      function isMyTurn() { if (!currentTurn || !mySide) return false; return currentTurn === mySide; }
+
+      function setMatchInfo(mid, side, turn, openerId) {
+        if (mid) { matchID = mid; matchIdBox.textContent = mid; }
+        if (side) { mySide = side; yourSideEl.textContent = side; }
+        if (turn) { currentTurn = turn; turnValEl.textContent = turn; }
+        if (openerId) myID = openerId;
+        redraw();
+      }
+
+      enemyGridEl.addEventListener('click', (ev) => {
+        const td = ev.target.closest('td');
+        if (!td) return;
+        const x = parseInt(td.dataset.x, 10);
+        const y = parseInt(td.dataset.y, 10);
+        if (!ws || ws.readyState !== 1) { alert("No WS connection — open from Players UI or refresh."); return; }
+        if (!matchID) { alert("No match id — open from Players UI or refresh."); return; }
+        if (!isMyTurn()) { alert("Not your turn."); return; }
+        if (enemy[y][x] === 1 || enemy[y][x] === 2 || enemy[y][x] === 3) { alert("Already fired at this cell."); return; }
+
+        lastShot = { x, y };
+        enemy[y][x] = 3; redraw();
+        lastResultEl.textContent = `Fired at (${x},${y}) — waiting result...`;
+        ws.send(JSON.stringify({ type: "shot_fired", match_id: matchID, x: x, y: y }));
+      });
+
+      function showToast(title, body, ttl = 4000) {
+        const t = document.createElement('div');
+        t.className = 'toast';
+        t.innerHTML = `<div class="title">${title}</div><div class="body">${body}</div>`;
+        toastStack.appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, ttl);
+      }
+
+      function markCellsAsSunk(cells, boardName) {
+        const target = boardName === 'own' ? ownGridEl : enemyGridEl;
+        for (const pt of cells) {
+          const r = pt.y, c = pt.x;
+          if (r >= 0 && r < SIZE && c >= 0 && c < SIZE) {
+            target.rows[r].cells[c].classList.remove('hit', 'miss', 'pending', 'own-ship');
+            target.rows[r].cells[c].classList.add('sunk');
+          }
+        }
+      }
+
+      // Attempt to load own ship placements from opener or API.
+      async function loadOwnShips() {
+        // 1) opener exposes a board or placements
+        if (window.opener) {
+          if (window.opener.myBoard && Array.isArray(window.opener.myBoard)) {
+            // assume a 2D boolean array or 2D numeric board (1==ship)
+            const b = window.opener.myBoard;
+            if (b.length === SIZE && b[0].length === SIZE) {
+              for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) ownShips[r][c] = !!b[r][c];
+              redraw(); return;
+            }
+          }
+          if (window.opener.placements && Array.isArray(window.opener.placements)) {
+            // placements: [{type,x,y,dir}, ...]
+            for (const p of window.opener.placements) {
+              const size = ShipSizes[p.type] || 3;
+              for (let i = 0; i < size; i++) {
+                let rx = p.x, ry = p.y;
+                if (p.dir === "H" || p.dir === "h") rx = p.x + i; else ry = p.y + i;
+                if (rx >= 0 && rx < SIZE && ry >= 0 && ry < SIZE) ownShips[ry][rx] = true;
+              }
+            }
+            redraw(); return;
+          }
+        }
+
+        // 2) try localStorage (set by place_ships.html)
+        if (matchID) {
+          try {
+            let stored = null;
+            if (myID) {
+              stored = localStorage.getItem('my_ships_' + matchID + '_' + myID);
+            }
+            if (!stored) {
+              stored = localStorage.getItem('my_ships_' + matchID);
+            }
+
+            if (stored) {
+              const placements = JSON.parse(stored);
+              if (Array.isArray(placements)) {
+                for (const p of placements) {
+                  const size = ShipSizes[p.type] || 3;
+                  for (let i = 0; i < size; i++) {
+                    let rx = p.x, ry = p.y;
+                    if (p.dir === "H" || p.dir === "h") rx = p.x + i; else ry = p.y + i;
+                    if (rx >= 0 && rx < SIZE && ry >= 0 && ry < SIZE) ownShips[ry][rx] = true;
+                  }
+                }
+                redraw(); return;
+              }
+            }
+          } catch (e) { console.warn('localStorage load failed', e); }
+        }
+
+        // 3) fallback: try server /api/games for match info (best-effort)
+        try {
+          const res = await fetch('/api/games');
+          const arr = await res.json();
+          const g = arr.find(x => x.match_id === matchID);
+          if (g) {
+            // if server exposes boards in response (adjust if your API different)
+            if (g.playerA_id && g.playerB_id && (g.boardA || g.boardB)) {
+              const myBoard = (myID === g.playerA_id) ? g.boardA : g.boardB;
+              if (myBoard && myBoard.length === SIZE) {
+                for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) ownShips[r][c] = !!myBoard[r][c];
+                redraw(); return;
+              }
+            }
+          }
+        } catch (e) {
+          // ignore — keep UI usable without ships
+        }
+      }
+
+      function inferSunkCells(shipType) {
+        const needed = ShipSizes[shipType] || 3;
+        if (!lastShot) {
+          const clusters = findAllHitClusters(enemy);
+          for (const cluster of clusters) {
+            if (cluster.length === needed) return clusterToCoords(cluster);
+          }
+          return null;
+        }
+        const clusters = findAllHitClusters(enemy);
+        for (const cluster of clusters) {
+          const coords = clusterToCoords(cluster);
+          for (const pt of coords) {
+            if (pt.x === lastShot.x && pt.y === lastShot.y && coords.length === needed) {
+              return coords;
+            }
+          }
+        }
+        for (const cluster of clusters) {
+          const coords = clusterToCoords(cluster);
+          if (coords.length === needed) return coords;
+        }
+        return null;
+      }
+
+      function findAllHitClusters(gridModel) {
+        const visited = Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
+        const clusters = [];
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            if (gridModel[r][c] === 2 && !visited[r][c]) {
+              const cluster = [];
+              const stack = [[r, c]];
+              visited[r][c] = true;
+              while (stack.length > 0) {
+                const [rr, cc] = stack.pop();
+                cluster.push([rr, cc]);
+                const neighbors = [[rr + 1, cc], [rr - 1, cc], [rr, cc + 1], [rr, cc - 1]];
+                for (const nb of neighbors) {
+                  const nr = nb[0], nc = nb[1];
+                  if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && !visited[nr][nc] && gridModel[nr][nc] === 2) {
+                    visited[nr][nc] = true;
+                    stack.push([nr, nc]);
+                  }
+                }
+              }
+              clusters.push(cluster);
+            }
+          }
+        }
+        return clusters;
+      }
+      function clusterToCoords(cluster) { return cluster.map(([r, c]) => ({ x: c, y: r })); }
+
+      function handleMessage(msg) {
+        if (!msg || !msg.type) return;
+
+        if (msg.type === 'match_start' || msg.type === 'all_ships_ready') {
+          const side = msg.your_side || msg.yourSide || (msg.your_side ? msg.your_side : null);
+          setMatchInfo(msg.match_id || msg.matchId || matchID, side, msg.start_turn || msg.startTurn, (window.opener && window.opener.myPlayerID) || myID);
+          // attempt to load own ships now we know match & opener
+          loadOwnShips();
+        }
+
+        if (msg.type === 'shot_result') {
+          const x = msg.x, y = msg.y;
+          const shooter = msg.shooter_id;
+          const hit = !!msg.hit;
+          const nextTurn = msg.next_turn || msg.nextTurn || null;
+          const gameOver = !!msg.game_over;
+
+          if (shooter === myID) {
+            enemy[y][x] = hit ? 2 : 1;
+            lastResultEl.textContent = `You fired at (${x},${y}) — ${hit ? 'HIT' : 'MISS'}` + (gameOver ? ' — YOU WIN!' : '');
+          } else {
+            own[y][x] = hit ? 2 : 1;
+            lastResultEl.textContent = `Opponent fired at (${x},${y}) — ${hit ? 'HIT' : 'MISS'}` + (gameOver ? ' — YOU LOSE!' : '');
+          }
+
+          currentTurn = nextTurn || currentTurn;
+          turnValEl.textContent = currentTurn || 'unknown';
+          redraw();
+
+          if (gameOver) {
+            showGameOver(msg.winner_id === myID);
+          }
+        }
+
+        if (msg.type === 'ship_sunk') {
+          const shipType = msg.ship_type || msg.shipType || null;
+          const owner = msg.owner_id || msg.ownerId || null;
+          const by = msg.by_id || msg.byId || null;
+
+          if (owner === myID) {
+            showToast("You sunk a ship!", `You sank opponent's ${shipType}`);
+          } else if (by === myID) {
+            showToast("You sunk a ship!", `You sank opponent's ${shipType}`);
+          } else {
+            showToast("Ship sunk", `${shipType} was sunk`);
+          }
+
+          // if server provided explicit cells, mark those
+          if (Array.isArray(msg.cells) && msg.cells.length > 0) {
+            markCellsAsSunk(msg.cells, owner === myID ? 'own' : 'enemy');
+          } else {
+            // fallback: infer & mark
+            if (owner !== myID) {
+              const inferred = inferSunkCells(shipType);
+              if (inferred && inferred.length > 0) markCellsAsSunk(inferred, 'enemy');
+              else {
+                // robust fallback: mark cluster including lastShot or mark all hit cells
+                let fallback = [];
+                if (lastShot) {
+                  const clusters = findAllHitClusters(enemy);
+                  for (const cluster of clusters) {
+                    const coords = clusterToCoords(cluster);
+                    if (coords.some(pt => pt.x === lastShot.x && pt.y === lastShot.y)) { fallback = coords; break; }
+                  }
+                }
+                if (fallback.length === 0) {
+                  for (let rr = 0; rr < SIZE; rr++) for (let cc = 0; cc < SIZE; cc++) if (enemy[rr][cc] === 2) fallback.push({ x: cc, y: rr });
+                }
+                if (fallback.length > 0) markCellsAsSunk(fallback, 'enemy');
+              }
+            } else {
+              // opponent sank your ship: mark on own board using own hit clusters
+              const clusters = findAllHitClusters(own);
+              const needed = ShipSizes[shipType] || 3;
+              for (const cluster of clusters) {
+                if (cluster.length === needed) { markCellsAsSunk(clusterToCoords(cluster), 'own'); break; }
+              }
+            }
+          }
+        }
+
+        if (msg.type === 'ships_ok') statusEl.textContent = 'Ships placed — waiting for opponent';
+        if (msg.type === 'ships_error') statusEl.textContent = 'Ships error: ' + (msg.error || 'unknown');
+        if (msg.type === 'error') console.warn('server error:', msg.error);
+      }
+
+      function attachWS(w) {
+        if (!w) return;
+        w.addEventListener('message', e => { try { const m = JSON.parse(e.data); handleMessage(m); } catch (err) { } });
+        if (window.opener) {
+          if (window.opener.currentMatchID) matchID = window.opener.currentMatchID;
+          if (window.opener.myPlayerID) myID = window.opener.myPlayerID;
+        }
+      }
+
+      if (ws) attachWS(ws);
+      else {
+        try {
+          const fallback = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + "/ws");
+          fallback.addEventListener('message', e => { try { handleMessage(JSON.parse(e.data)); } catch { } });
+        } catch (err) { console.warn('fallback ws failed', err); }
+      }
+
+      // If we're opened from Players UI but placements aren't yet available on opener,
+      // poll for them briefly and apply as soon as they arrive (helps race conditions).
+      function waitForOpenerPlacements(timeoutMs = 10000, intervalMs = 200) {
+        const start = Date.now();
+        const iv = setInterval(() => {
+          try {
+            if (window.opener && !window.opener.closed) {
+              if (window.opener.placements && Array.isArray(window.opener.placements) && window.opener.placements.length > 0) {
+                console.log('fire.html: detected opener.placements, applying...');
+                applyPlacementsArray(window.opener.placements);
+                clearInterval(iv);
+                return;
+              }
+              if (window.opener.myBoard && Array.isArray(window.opener.myBoard) && window.opener.myBoard.length === SIZE) {
+                console.log('fire.html: detected opener.myBoard, applying...');
+                const b = window.opener.myBoard;
+                for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) ownShips[r][c] = !!b[r][c];
+                redraw();
+                clearInterval(iv);
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn('waitForOpenerPlacements error', e);
+          }
+          if (Date.now() - start > timeoutMs) {
+            clearInterval(iv);
+            console.log('waitForOpenerPlacements: timed out, no placements found on opener.');
+          }
+        }, intervalMs);
+      }
+
+      // start watcher if opener exists (helps when players UI sets placements after opening fire UI)
+      if (window.opener) {
+        waitForOpenerPlacements(15000, 250);
+      }
+
+      async function refreshFromServerIntoPage() {
+        try {
+          const mid = (window.opener && window.opener.currentMatchID) || matchID || (document.getElementById('matchIdBox')?.textContent || '');
+          if (!mid) { statusEl.textContent = "No match id available"; return; }
+
+          const res = await fetch('/api/games');
+          const games = await res.json();
+          const g = games.find(x => x.match_id === mid);
+          if (!g) { statusEl.textContent = "Match not found on server"; return; }
+
+          const openerId = (window.opener && window.opener.myPlayerID) || myID;
+          const side = (openerId === g.playerA_id) ? 'A' : (openerId === g.playerB_id) ? 'B' : null;
+
+          matchID = g.match_id;
+          mySide = side || mySide;
+          currentTurn = g.turn || currentTurn;
+          myID = openerId || myID;
+
+          matchIdBox.textContent = matchID;
+          yourSideEl.textContent = mySide || 'unknown';
+          turnValEl.textContent = currentTurn || 'unknown';
+          statusEl.textContent = currentTurn ? `Loaded server state — turn: ${currentTurn}` : 'Loaded server state — waiting for turn';
+
+          // attempt to load ship placements if possible
+          await loadOwnShips();
+          redraw();
+        } catch (err) {
+          console.error("refresh failed:", err);
+          statusEl.textContent = "Refresh failed";
+        }
+      }
+
+      refreshBtn.addEventListener('click', () => { statusEl.textContent = "Refreshing..."; refreshFromServerIntoPage(); });
+      copyBtn.addEventListener('click', () => { if (!matchID) return alert('No match id'); navigator.clipboard.writeText(matchID).then(() => alert('Match id copied')); });
+
+      window.refreshFromServerIntoPage = refreshFromServerIntoPage;
+      window.__bs_fire = { getState: () => ({ matchID, mySide, currentTurn, myID, enemy, own, lastShot, ownShips }) };
+
+      redraw();
+      (async function init() {
+        if (window.opener) {
+          if (window.opener.currentMatchID) matchID = window.opener.currentMatchID;
+          if (window.opener.myPlayerID) myID = window.opener.myPlayerID;
+        }
+        await refreshFromServerIntoPage();
+      })();
+
+      // Game Over Modal Logic
+      const modal = document.getElementById('gameOverModal');
+      const modalContent = document.getElementById('modalContent');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalMsg = document.getElementById('modalMsg');
+      const playAgainBtn = document.getElementById('playAgainBtn');
+
+      function showGameOver(isVictory) {
+        modal.style.display = 'flex';
+        if (isVictory) {
+          modalContent.className = 'modal-content victory';
+          modalTitle.textContent = 'VICTORY';
+          modalMsg.textContent = 'Congratulations! You have sunk all enemy ships and won the match.';
+        } else {
+          modalContent.className = 'modal-content defeat';
+          modalTitle.textContent = 'DEFEAT';
+          modalMsg.textContent = 'All your ships have been sunk. Better luck next time!';
+        }
+      }
+
+      playAgainBtn.addEventListener('click', () => {
+        // Close this window to return to the lobby (players.html)
+        window.close();
+      });
+
+    })();
+  </script>
+</body>
+
+</html>
