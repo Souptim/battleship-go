@@ -69,30 +69,6 @@ A real-time, multiplayer Battleship game built with **Go** (Golang) and **WebSoc
     -   **White/Grey** marker = MISS.
     -   Sink all 5 enemy ships to win!
 
-## 📂 Project Structure
 
-```
-battleship-go/
-├── cmd/
-│   └── server/         # Entry point for the application
-├── internal/
-│   ├── game/           # Core game logic and types
-│   └── ws/             # WebSocket handlers and connection management
-├── web/                # Frontend assets (HTML, CSS, JS)
-├── go.mod              # Go module definition
-└── README.md           # Project documentation
-```
 
-## 🤝 Contributing
 
-Contributions are welcome! Feel free to submit a Pull Request.
-
-1.  Fork the project.
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
-
-## 📄 License
-
-This project is open source and available under the [MIT License](LICENSE).
