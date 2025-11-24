@@ -2,8 +2,6 @@
 
 A real-time, multiplayer Battleship game built with **Go** (Golang) and **WebSockets**. Experience the classic naval combat strategy game directly in your browser with seamless matchmaking and live gameplay.
 
-![Battleship-Go Banner](https://via.placeholder.com/800x200?text=Battleship-Go+Multiplayer)
-
 ## 🌟 Features
 
 -   **Real-Time Multiplayer**: Challenge other players instantly via the live lobby.
@@ -68,6 +66,7 @@ A real-time, multiplayer Battleship game built with **Go** (Golang) and **WebSoc
     -   **Red** marker = HIT.
     -   **White/Grey** marker = MISS.
     -   Sink all 5 enemy ships to win!
+
 
 
 
