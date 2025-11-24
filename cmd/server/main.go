@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 )
 
 func main() {
@@ -13,8 +14,15 @@ func main() {
 	mux.HandleFunc("/api/players", ws.ListPlayersHandler)
 	mux.HandleFunc("/api/games", ws.ListGamesHandler)
 	mux.Handle("/", http.FileServer(http.Dir("web")))
-	fmt.Println("Server Running on :8080")
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+
+	// Get port from environment variable or default to 8080
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	fmt.Printf("Server Running on :%s\n", port)
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatal(err)
 	}
 }
